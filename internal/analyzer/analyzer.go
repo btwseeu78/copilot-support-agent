@@ -13,7 +13,7 @@ import (
 
 const systemPrompt = `You are a Helm chart values.yaml structural diff analyzer.
 
-Your job is to compare an UPSTREAM values.yaml (from a public Helm chart) with a LOCAL values.yaml (the user's overrides/customizations) and produce a clear report.
+Your job is to compare an UPSTREAM values.yaml (from a public Helm chart) with a LOCAL values.yaml (the user's overrides/customizations) and detect breaking changes.
 You can use all available tools to fetch values.yaml from a public or private Helm chart repository (HTTP/HTTPS or OCI) for a specific chart and version. For OCI registries (oci://), provide the OCI repository URL. If the registry requires authentication, pass username and password.
 
 ## Analysis Rules
@@ -24,20 +24,30 @@ You can use all available tools to fetch values.yaml from a public or private He
    - A key the local file overrides has changed type in upstream (scalar→map, map→scalar, etc.)
    - A key the local file overrides has been removed in upstream
    - A block the local file overrides has been restructured (keys moved/renamed)
+   - local chart overrides has been removed in upstream it might suggest breaking change
 4. **Missing Overrides**: Flag new upstream keys that exist within blocks the local file already overrides — the user may need to set these.
 5. **Safe Changes**: Value-only changes (same key, same type, different default) are NOT breaking.
 
-## Output Format
+## Output Rules — VERY IMPORTANT
 
-Produce a structured report with:
-- **Summary**: One-line verdict (breaking / no breaking changes)
-- **Breaking Changes**: Table with key path, change type, details
-- **Missing Overrides**: New upstream keys the user might want to set
-- **Info**: Other structural differences (non-breaking)
+Your direct message response MUST be exactly ONE line and nothing else. The format is:
+- If breaking changes found: "BREAKING CHANGES DETECTED: YES"
+- If no breaking changes found: "BREAKING CHANGES DETECTED: NO"
 
-Be concise. Use markdown tables. Do not repeat the full YAML back — just reference key paths.
+Do NOT include any other text, tables, explanations, or details in your direct message.
 
-also use tool "create_markdown_file" to create a markdown file Readme.md to document all the options from values.yaml user can overwrite use upstream values.yaml for document.`
+All detailed analysis must be written to files using the provided tools:
+
+1. Use the "create_diff_report" tool to write the full structural diff report to STRUCTURAL_DIFF_REPORT.md. The report should contain:
+   - Summary (one-line verdict)
+   - Breaking Changes table (key path, change type, details)
+   - Missing Overrides (new upstream keys the user might want to set)
+   - Info (other structural differences, non-breaking)
+   Use markdown tables. Be concise. Do not repeat the full YAML — just reference key paths.
+
+2. Use the "create_readme" tool to write Readme.md documenting all the options from the upstream values.yaml that the user can override.
+
+You MUST call both tools before responding with your one-line verdict.`
 
 // FetchHelmValuesParams defines the parameters for the fetch_helm_values tool.
 type FetchHelmValuesParams struct {
@@ -48,9 +58,14 @@ type FetchHelmValuesParams struct {
 	Password  string `json:"password,omitempty" jsonschema:"Optional password for authenticated registries"`
 }
 
-// ReadMeParams defines the parameters for the create_markdown_file tool.
+// ReadMeParams defines the parameters for the create_readme tool.
 type ReadMeParams struct {
 	Content string `json:"content" jsonschema:"The raw markdown content to write to the Readme.md file"`
+}
+
+// DiffReportParams defines the parameters for the create_diff_report tool.
+type DiffReportParams struct {
+	Content string `json:"content" jsonschema:"The full structural diff report in markdown format to write to STRUCTURAL_DIFF_REPORT.md"`
 }
 
 // AnalyzeOptions holds optional credentials passed from the CLI.
@@ -72,16 +87,27 @@ func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts Analy
 	}
 	defer client.Stop()
 
-	// Define a tool generate Readme.md
+	// Define a tool to generate Readme.md
 	generateReadmeTool := copilot.DefineTool(
-		"create_markdown_file",
-		"Create a markdown file",
+		"create_readme",
+		"Create a Readme.md file documenting all upstream values.yaml options the user can override",
 		func(params ReadMeParams, inv copilot.ToolInvocation) (any, error) {
 			err := os.WriteFile("Readme.md", []byte(params.Content), 0644)
 			return nil, err
 		},
 	)
 	generateReadmeTool.SkipPermission = true
+
+	// Define a tool to generate STRUCTURAL_DIFF_REPORT.md
+	generateDiffReportTool := copilot.DefineTool(
+		"create_diff_report",
+		"Create a STRUCTURAL_DIFF_REPORT.md file containing the full structural diff analysis with breaking changes, missing overrides, and other details",
+		func(params DiffReportParams, inv copilot.ToolInvocation) (any, error) {
+			err := os.WriteFile("STRUCTURAL_DIFF_REPORT.md", []byte(params.Content), 0644)
+			return nil, err
+		},
+	)
+	generateDiffReportTool.SkipPermission = true
 
 	// Define a tool so the AI can fetch additional chart versions if needed
 	fetchTool := copilot.DefineTool(
@@ -114,7 +140,7 @@ func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts Analy
 			Content: systemPrompt,
 		},
 		OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
-		Tools:               []copilot.Tool{fetchTool, generateReadmeTool},
+		Tools:               []copilot.Tool{fetchTool, generateReadmeTool, generateDiffReportTool},
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create Copilot session: %w", err)
