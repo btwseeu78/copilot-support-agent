@@ -16,6 +16,9 @@ dependencies:
   - name: redis
     version: 17.0.0
     repository: https://charts.bitnami.com/bitnami
+  - name: envoy
+    version: v1.7.1
+    repository: oci://docker.io/envoyproxy/gateway-helm
 `)
 
 	deps, err := GetDependencies(chartYAML)
@@ -23,8 +26,8 @@ dependencies:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(deps) != 2 {
-		t.Fatalf("expected 2 dependencies, got %d", len(deps))
+	if len(deps) != 3 {
+		t.Fatalf("expected 3 dependencies, got %d", len(deps))
 	}
 
 	if deps[0].Name != "velero" || deps[0].Version != "12.0.0" || deps[0].Repository != "https://vmware-tanzu.github.io/helm-charts" {
@@ -32,5 +35,8 @@ dependencies:
 	}
 	if deps[1].Name != "redis" || deps[1].Version != "17.0.0" || deps[1].Repository != "https://charts.bitnami.com/bitnami" {
 		t.Errorf("unexpected dependency 1: %+v", deps[1])
+	}
+	if deps[2].Name != "envoy" || deps[2].Version != "v1.7.1" || deps[2].Repository != "oci://docker.io/envoyproxy/gateway-helm" {
+		t.Errorf("unexpected dependency 2: %+v", deps[2])
 	}
 }

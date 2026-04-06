@@ -1,9 +1,15 @@
-image:
-  repository: docker.io/velero/velero
-  tag: v1.18.0
-  # Digest value example: sha256:73266e6bd7e2fe3f65fb20677d36c4a8df76d417d9ba76bd9932e0d983a776ec.
-  # If used, it will take precedence over the image.tag.
-  # digest:
-  pullPolicy: IfNotPresent
-  # One or more secrets to be used when pulling images
-  imagePullSecrets: []
+velero:
+  image:
+    repository: docker.io/velero/velero
+    tag: v1.18.0
+    pullPolicy: IfNotPresent
+    imagePullSecrets: []
+envoy:
+  enabled: true
+  image:
+    repository: docker.io/envoyproxy/envoy
+    tag: v1.7.1
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80

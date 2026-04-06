@@ -1,155 +1,78 @@
-# Velero Helm Chart - Configuration Reference
+# Helm Chart Values.yaml Configuration Reference
 
-## Overview
-This document provides a complete reference of all configurable options available in the Velero Helm chart (v12.0.0). All values can be overridden in your `values.yaml` file.
-
----
+This document provides a comprehensive list of all configurable options from the upstream Helm chart values for Velero (v12.0.0) and EnvoyGateway (v1.7.1) that you can override in your custom values.yaml.
 
 ## Table of Contents
-1. [Namespace Configuration](#namespace-configuration)
-2. [Container Image Settings](#container-image-settings)
-3. [Deployment & Release Naming](#deployment--release-naming)
-4. [Pod & Deployment Metadata](#pod--deployment-metadata)
-5. [Resource Management](#resource-management)
-6. [Pod Configuration](#pod-configuration)
-7. [Pod Scheduling & Affinity](#pod-scheduling--affinity)
-8. [Health Checks](#health-checks)
-9. [Storage & Volumes](#storage--volumes)
-10. [Metrics & Monitoring](#metrics--monitoring)
-11. [CRD Upgrade Job](#crd-upgrade-job)
+
+- [Velero Chart Configuration](#velero-chart-configuration)
+- [EnvoyGateway Chart Configuration](#envoygateway-chart-configuration)
 
 ---
 
-## Namespace Configuration
+## Velero Chart Configuration
 
-### namespace.labels
-Kubernetes labels to apply to the Velero installation namespace. Useful for Pod Security Standards enforcement.
+The Velero chart configures a backup and disaster recovery solution for Kubernetes.
+
+### Namespace Configuration
 
 ```yaml
 namespace:
   labels: {}
+    # Enforce Pod Security Standards with Namespace Labels
     # pod-security.kubernetes.io/enforce: privileged
     # pod-security.kubernetes.io/enforce-version: latest
+    # pod-security.kubernetes.io/audit: privileged
+    # pod-security.kubernetes.io/audit-version: latest
+    # pod-security.kubernetes.io/warn: privileged
+    # pod-security.kubernetes.io/warn-version: latest
 ```
 
-**Type:** `map`  
-**Default:** `{}`
-
----
-
-## Container Image Settings
-
-### image.*
-Configure the Velero container image used in the deployment and daemonset (if node-agent is enabled).
+### Image Configuration
 
 ```yaml
 image:
   repository: docker.io/velero/velero
   tag: v1.18.0
-  # Optional: container image digest (takes precedence over tag)
-  # digest: sha256:73266e6bd7e2fe3f65fb20677d36c4a8df76d417d9ba76bd9932e0d983a776ec
+  # Digest value example: sha256:73266e6bd7e2fe3f65fb20677d36c4a8df76d417d9ba76bd9932e0d983a776ec
+  digest: ""  # If used, takes precedence over tag
   pullPolicy: IfNotPresent
-  # Kubernetes image pull secrets for private registries
   imagePullSecrets: []
     # - registrySecretName
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `image.repository` | string | `docker.io/velero/velero` | Container image repository |
-| `image.tag` | string | `v1.18.0` | Container image tag |
-| `image.digest` | string | `` | Container image digest (overrides tag) |
-| `image.pullPolicy` | string | `IfNotPresent` | Image pull policy (`Always`, `IfNotPresent`, `Never`) |
-| `image.imagePullSecrets` | list | `[]` | Image pull secrets for private registries |
-
----
-
-## Deployment & Release Naming
-
-### nameOverride
-Overrides the chart name used in templates. If set, this is used instead of `.Chart.Name`.
+### Helm Release Configuration
 
 ```yaml
 nameOverride: ""
-```
-
-**Type:** `string`  
-**Default:** `""`
-
-### fullnameOverride
-Overrides the full release name. If set, this is used instead of the generated fullname.
-
-```yaml
 fullnameOverride: ""
 ```
 
-**Type:** `string`  
-**Default:** `""`
-
----
-
-## Pod & Deployment Metadata
-
-### annotations
-Annotations to add to the Velero deployment. Useful for triggering rolling updates with reloader.
+### Annotations and Labels
 
 ```yaml
+# Annotations on Velero deployment (reloader example: secret.reloader.stakater.com/reload: "<VELERO_SECRET_NAME>")
 annotations: {}
-  # secret.reloader.stakater.com/reload: "<VELERO_SECRET_NAME>"
-```
 
-**Type:** `map`  
-**Default:** `{}`
-
-### secretAnnotations
-Annotations to add to the Velero secret.
-
-```yaml
+# Annotations on Velero secret
 secretAnnotations: {}
-```
 
-**Type:** `map`  
-**Default:** `{}`
-
-### labels
-Labels to add to the Velero deployment.
-
-```yaml
+# Labels on Velero deployment
 labels: {}
-```
 
-**Type:** `map`  
-**Default:** `{}`
-
-### podAnnotations
-Annotations to add to the Velero deployment's pod template. Useful for IAM roles (kube2iam, kiam).
-
-```yaml
+# Pod template annotations (for kube2iam/kiam: iam.amazonaws.com/role: "arn:aws:iam::<AWS_ACCOUNT_ID>:role/<VELERO_ROLE_NAME>")
 podAnnotations: {}
-  # iam.amazonaws.com/role: "arn:aws:iam::<AWS_ACCOUNT_ID>:role/<VELERO_ROLE_NAME>"
-```
 
-**Type:** `map`  
-**Default:** `{}`
-
-### podLabels
-Additional labels for the Velero deployment's pod template.
-
-```yaml
+# Pod template labels
 podLabels: {}
 ```
 
-**Type:** `map`  
-**Default:** `{}`
-
----
-
-## Resource Management
-
-### resources
-CPU and memory requests and limits for the Velero deployment container.
+### Deployment Configuration
 
 ```yaml
+# Revision history limit for rollback
+revisionHistoryLimit: 10  # Default Kubernetes value
+
+# Resource requests and limits
 resources: {}
   # requests:
   #   cpu: 500m
@@ -157,162 +80,63 @@ resources: {}
   # limits:
   #   cpu: 1000m
   #   memory: 512Mi
-```
 
-| Key | Type | Default |
-|-----|------|---------|
-| `resources.requests.cpu` | string | `` |
-| `resources.requests.memory` | string | `` |
-| `resources.limits.cpu` | string | `` |
-| `resources.limits.memory` | string | `` |
-
-### resizePolicy
-Container resize policy for the Velero deployment. Requires Kubernetes 1.27+.
-
-```yaml
+# Container resize policy
 resizePolicy: []
   # - resourceName: cpu
   #   restartPolicy: NotRequired
   # - resourceName: memory
   #   restartPolicy: RestartContainer
-```
 
-**Type:** `list`  
-**Default:** `[]`
-
-### upgradeJobResources
-CPU and memory requests and limits for the upgradeCRDs job pod.
-
-```yaml
-upgradeJobResources: {}
-  # requests:
-  #   cpu: 50m
-  #   memory: 128Mi
-  # limits:
-  #   cpu: 100m
-  #   memory: 256Mi
-```
-
-**Type:** `map`  
-**Default:** `{}`
-
-### hostAliases
-Configure custom host aliases for the Velero pod.
-
-```yaml
+# Configure hostAliases for custom DNS
 hostAliases: []
   # - ip: "127.0.0.1"
   #   hostnames:
   #     - "foo.local"
   #     - "bar.local"
-```
 
-**Type:** `list`  
-**Default:** `[]`
-
----
-
-## Pod Configuration
-
-### dnsPolicy
-DNS policy for the Velero pod.
-
-```yaml
+# DNS policy
 dnsPolicy: ClusterFirst
-```
 
-**Type:** `string`  
-**Default:** `ClusterFirst`
+# DNS configuration
+dnsConfig: {}
 
-### initContainers
-Init containers to run before the main Velero container.
-
-```yaml
+# Init containers (at least one plugin provider image recommended)
 initContainers: []
-```
+  # - name: velero-plugin-for-aws
+  #   image: velero/velero-plugin-for-aws:v1.13.1
+  #   imagePullPolicy: IfNotPresent
+  #   volumeMounts:
+  #     - mountPath: /target
+  #       name: plugins
 
-**Type:** `list`  
-**Default:** `[]`
-
-### podSecurityContext
-Security context for the entire Velero pod.
-
-```yaml
+# Pod security context (fsGroup recommended for AWS IAM Roles)
 podSecurityContext: {}
-  # runAsUser: 1000
-  # runAsGroup: 3000
-  # fsGroup: 2000
-```
+  # fsGroup: 1337
 
-**Type:** `map`  
-**Default:** `{}`
-
-### containerSecurityContext
-Security context for the Velero container.
-
-```yaml
+# Container security context
 containerSecurityContext: {}
   # allowPrivilegeEscalation: false
-  # readOnlyRootFilesystem: true
   # capabilities:
-  #   drop:
-  #     - ALL
-```
+  #   drop: ["ALL"]
+  # readOnlyRootFilesystem: true
 
-**Type:** `map`  
-**Default:** `{}`
-
-### lifecycle
-Container lifecycle hooks (postStart, preStop).
-
-```yaml
+# Container lifecycle hooks
 lifecycle: {}
-  # preStop:
-  #   exec:
-  #     command: ["/bin/sh", "-c", "sleep 15"]
-```
 
-**Type:** `map`  
-**Default:** `{}`
+# Extra volumes and volume mounts
+extraVolumes: []
+extraVolumeMounts: []
 
-### priorityClassName
-Priority class name for pod scheduling priority.
-
-```yaml
+# Pod scheduling
 priorityClassName: ""
-```
-
-**Type:** `string`  
-**Default:** `""`
-
-### runtimeClassName
-Runtime class for the pod.
-
-```yaml
 runtimeClassName: ""
-```
-
-**Type:** `string`  
-**Default:** `""`
-
-### terminationGracePeriodSeconds
-Grace period in seconds for pod termination.
-
-```yaml
 terminationGracePeriodSeconds: 3600
-```
+tolerations: []
+affinity: {}
+nodeSelector: {}
 
-**Type:** `integer`  
-**Default:** `3600`
-
----
-
-## Health Checks
-
-### livenessProbe
-Liveness probe configuration to determine if Velero is alive.
-
-```yaml
+# Liveness and readiness probes
 livenessProbe:
   httpGet:
     path: /metrics
@@ -323,14 +147,7 @@ livenessProbe:
   timeoutSeconds: 5
   successThreshold: 1
   failureThreshold: 5
-```
 
-**Type:** `map`
-
-### readinessProbe
-Readiness probe configuration to determine if Velero is ready to serve traffic.
-
-```yaml
 readinessProbe:
   httpGet:
     path: /metrics
@@ -343,281 +160,657 @@ readinessProbe:
   failureThreshold: 5
 ```
 
-**Type:** `map`
-
----
-
-## Pod Scheduling & Affinity
-
-### tolerations
-Node tolerations for the Velero pod, allowing scheduling on tainted nodes.
+### CRD Management
 
 ```yaml
-tolerations: []
-  # - key: "key1"
-  #   operator: "Equal"
-  #   value: "value1"
-  #   effect: "NoSchedule"
-```
+upgradeCRDs: true  # Upgrade CRDs on Helm install/upgrade
+cleanUpCRDs: false  # Cleanup CRDs (destructive - use cautiously)
 
-**Type:** `list`  
-**Default:** `[]`
+upgradeJobResources: {}
+  # requests:
+  #   cpu: 50m
+  #   memory: 128Mi
+  # limits:
+  #   cpu: 100m
+  #   memory: 256Mi
 
-### affinity
-Pod affinity and anti-affinity rules for the Velero pod.
-
-```yaml
-affinity: {}
-  # podAntiAffinity:
-  #   requiredDuringSchedulingIgnoredDuringExecution:
-  #     - labelSelector:
-  #         matchExpressions:
-  #           - key: app
-  #             operator: In
-  #             values:
-  #               - velero
-```
-
-**Type:** `map`  
-**Default:** `{}`
-
-### nodeSelector
-Node selector labels for scheduling Velero on specific nodes.
-
-```yaml
-nodeSelector: {}
-  # workload-type: backup
-```
-
-**Type:** `map`  
-**Default:** `{}`
-
-### dnsConfig
-DNS configuration for the Velero pod.
-
-```yaml
-dnsConfig: {}
-  # nameservers:
-  #   - 8.8.8.8
-  # options:
-  #   - name: ndots
-  #     value: "2"
-```
-
-**Type:** `map`  
-**Default:** `{}`
-
----
-
-## Storage & Volumes
-
-### extraVolumes
-Additional volumes to attach to the Velero pod.
-
-```yaml
-extraVolumes: []
-  # - name: extra-config
-  #   configMap:
-  #     name: extra-config-map
-```
-
-**Type:** `list`  
-**Default:** `[]`
-
-### extraVolumeMounts
-Additional volume mounts in the Velero container.
-
-```yaml
-extraVolumeMounts: []
-  # - name: extra-config
-  #   mountPath: /etc/extra-config
-  #   readOnly: true
-```
-
-**Type:** `list`  
-**Default:** `[]`
-
-### extraObjects
-Additional Kubernetes objects to create (e.g., ConfigMaps, Secrets, NetworkPolicies).
-
-```yaml
-extraObjects: []
-  # - apiVersion: v1
-  #   kind: ConfigMap
-  #   metadata:
-  #     name: extra-config
-  #   data:
-  #     key: value
-```
-
-**Type:** `list`  
-**Default:** `[]`
-
----
-
-## Metrics & Monitoring
-
-### metrics.enabled
-Enable Prometheus metrics exposure.
-
-```yaml
-metrics:
-  enabled: true
-```
-
-**Type:** `boolean`  
-**Default:** `true`
-
-### metrics.scrapeInterval
-Prometheus scrape interval for Velero metrics.
-
-```yaml
-metrics:
-  scrapeInterval: 30s
-```
-
-**Type:** `string`  
-**Default:** `30s`
-
-### metrics.scrapeTimeout
-Prometheus scrape timeout for Velero metrics.
-
-```yaml
-metrics:
-  scrapeTimeout: 10s
-```
-
-**Type:** `string`  
-**Default:** `10s`
-
-### metrics.service
-Kubernetes service configuration for metrics endpoint.
-
-```yaml
-metrics:
-  service:
-    annotations: {}
-    type: ClusterIP
-    labels: {}
-    nodePort: null
-    externalTrafficPolicy: ""
-    internalTrafficPolicy: ""
-    ipFamilyPolicy: ""
-    ipFamilies: []
-```
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `metrics.service.type` | string | `ClusterIP` | Service type (`ClusterIP`, `NodePort`, `LoadBalancer`) |
-| `metrics.service.nodePort` | integer | `null` | NodePort when type is NodePort |
-| `metrics.service.externalTrafficPolicy` | string | `` | External traffic policy |
-| `metrics.service.internalTrafficPolicy` | string | `` | Internal traffic policy |
-
-### metrics.podAnnotations
-Pod annotations for Prometheus scraping.
-
-```yaml
-metrics:
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "8085"
-    prometheus.io/path: "/metrics"
-```
-
-**Type:** `map`
-
-### metrics.serviceMonitor
-Prometheus ServiceMonitor configuration for automated scraping.
-
-```yaml
-metrics:
-  serviceMonitor:
-    autodetect: true
-    enabled: false
-    annotations: {}
-    additionalLabels: {}
-```
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `metrics.serviceMonitor.autodetect` | boolean | `true` | Auto-detect CRD availability |
-| `metrics.serviceMonitor.enabled` | boolean | `false` | Enable ServiceMonitor |
-| `metrics.serviceMonitor.annotations` | map | `{}` | ServiceMonitor annotations |
-| `metrics.serviceMonitor.additionalLabels` | map | `{}` | ServiceMonitor labels |
-
----
-
-## CRD Upgrade Job
-
-### upgradeCRDsJob.*
-Configuration for the Kubernetes CRD upgrade job that runs during Helm installation/upgrade.
-
-```yaml
 upgradeCRDsJob:
   extraVolumes: []
   extraVolumeMounts: []
   extraEnvVars: []
   automountServiceAccountToken: true
+  # shellCmd: /tmp/sh
+  # updateCmd: /velero install --crds-only --dry-run -o yaml | /tmp/kubectl apply -f -
+
+kubectl:
+  image:
+    repository: registry.k8s.io/kubectl
+    # tag: v1.34.5  # Overrides cluster Kubernetes version
+    # digest: ""
+  containerSecurityContext: {}
+  resources: {}
+  annotations: {}
+  labels: {}
+  extraVolumes: []
+  extraVolumeMounts: []
 ```
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `upgradeCRDsJob.extraVolumes` | list | `[]` | Additional volumes for upgrade job |
-| `upgradeCRDsJob.extraVolumeMounts` | list | `[]` | Additional volume mounts for upgrade job |
-| `upgradeCRDsJob.extraEnvVars` | list | `[]` | Additional environment variables |
-| `upgradeCRDsJob.automountServiceAccountToken` | boolean | `true` | Mount service account token |
-
----
-
-## Example: Complete Override
+### Metrics Configuration
 
 ```yaml
-# Minimal: Override only image
-image:
-  repository: myregistry.azurecr.io/velero
-  tag: v1.18.0
-  pullPolicy: Always
-
----
-
-# Complete: Override multiple sections
-image:
-  repository: docker.io/velero/velero
-  tag: v1.18.0
-  pullPolicy: IfNotPresent
-
-resources:
-  requests:
-    cpu: 250m
-    memory: 512Mi
-  limits:
-    cpu: 1000m
-    memory: 1Gi
-
-podAnnotations:
-  iam.amazonaws.com/role: "arn:aws:iam::123456789012:role/velero-role"
-
-nodeSelector:
-  workload-type: backup
-
-tolerations:
-  - key: workload-type
-    operator: Equal
-    value: backup
-    effect: NoSchedule
-
 metrics:
   enabled: true
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+
+  service:
+    annotations: {}
+    type: ClusterIP
+    labels: {}
+    nodePort: null
+    externalTrafficPolicy: ""  # Cluster or Local
+    internalTrafficPolicy: ""
+    ipFamilyPolicy: ""  # For dual-stack support
+    ipFamilies: []      # IPv4 and/or IPv6
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8085"
+    prometheus.io/path: "/metrics"
+
   serviceMonitor:
-    enabled: true
-    additionalLabels:
-      prometheus: kube-prometheus
+    autodetect: true
+    enabled: false
+    annotations: {}
+    additionalLabels: {}
+    # metricRelabelings: []
+    # relabelings: []
+    # namespace: ""
+    # scheme: ""
+    # tlsConfig: {}
+
+  nodeAgentPodMonitor:
+    autodetect: true
+    enabled: false
+    annotations: {}
+    additionalLabels: {}
+    # metricRelabelings: []
+    # relabelings: []
+    # namespace: ""
+    # scheme: ""
+    # tlsConfig: {}
+
+  prometheusRule:
+    autodetect: true
+    enabled: false
+    additionalLabels: {}
+    # namespace: ""
+    spec: []
+    # - alert: VeleroBackupFailed
+    #   annotations:
+    #     message: Velero backup {{ $labels.schedule }} has failed
+    #   expr: |-
+    #     velero_backup_last_status{schedule!=""} != 1
+    #   for: 15m
+    #   labels:
+    #     severity: warning
+```
+
+### Backup and Snapshot Configuration
+
+```yaml
+backupsEnabled: true   # Create BackupStorageLocation CRD
+snapshotsEnabled: true # Create VolumeSnapshotLocation CRD
+
+configuration:
+  # BackupStorageLocation(s) - configure multiple by adding more elements
+  backupStorageLocation:
+  - name: ""             # Defaults to "default"
+    provider: ""         # e.g., aws, azure, gcp
+    bucket: ""           # Storage bucket name
+    caCert: ""           # Base64 encoded CA bundle
+    prefix: ""           # Directory prefix
+    default: false       # Mark as default location
+    validationFrequency: ""
+    accessMode: ReadWrite  # ReadWrite or ReadOnly
+    credential:
+      name: ""           # Secret name
+      key: ""            # Secret key
+    config: {}
+    #  region: ""
+    #  s3ForcePathStyle: ""
+    #  s3Url: ""
+    #  kmsKeyId: ""
+    #  resourceGroup: ""
+    #  subscriptionId: ""
+    #  storageAccount: ""
+    #  publicUrl: ""
+    #  serviceAccount: ""
+    #  insecureSkipTLSVerify: ""
+    annotations: {}
+
+  # VolumeSnapshotLocation(s)
+  volumeSnapshotLocation:
+  - name: ""             # Defaults to "default"
+    provider: ""         # Snapshot provider
+    credential:
+      name: ""
+      key: ""
+    config: {}
+    #  region: ""
+    #  apiTimeout: ""
+    #  resourceGroup: ""
+    #  subscriptionId: ""
+    #  incremental: ""
+    #  snapshotLocation: ""
+    #  project: ""
+    annotations: {}
+
+  # Server-level settings (velero server CLI flags)
+  uploaderType: ""         # Default: kopia
+  backupSyncPeriod: ""     # Default: 1m
+  fsBackupTimeout: ""      # Default: 4h
+  clientBurst: ""          # Default: 30
+  clientPageSize: ""       # Default: 500
+  clientQPS: ""            # Default: 20.0
+  defaultBackupStorageLocation: ""  # Default: "default"
+  defaultItemOperationTimeout: ""   # Default: 4h
+  defaultBackupTTL: ""     # Default: 72h
+  defaultVolumeSnapshotLocations: ""
+  disableControllers: ""   # Comma-separated list
+  disableInformerCache: false
+  garbageCollectionFrequency: ""  # Default: 1h
+  itemBlockWorkerCount: ""        # Default: 1
+  logFormat: ""            # text or json
+  logLevel: ""             # info, debug, warning, error, fatal, panic
+  metricsAddress: ""       # Default: :8085
+  pluginDir: ""            # Default: /plugins
+  profilerAddress: ""      # Default: localhost:6060
+  restoreOnlyMode: ""      # Default: false
+  restoreResourcePriorities: ""
+  storeValidationFrequency: ""  # Default: 1m
+  terminatingResourceTimeout: ""  # Default: 10m
+  defaultSnapshotMoveData: ""     # Default: false
+  dataMoverPrepareTimeout: ""     # Default: 30m
+  features: ""             # Comma-separated feature flags (e.g., EnableCSI)
+  defaultVolumesToFsBackup: ""    # Default: false
+  defaultRepoMaintainFrequency: ""
+
+  namespace: ""     # Default: velero
+
+  repositoryMaintenanceJob:
+    repositoryConfigData:
+      name: "velero-repo-maintenance"
+      global:
+        keepLatestMaintenanceJobs: 3
+      # repositories:
+      #   "kibishii-default-kopia":
+      #     podResources:
+      #       cpuRequest: "200m"
+      #       cpuLimit: "400m"
+      #       memoryRequest: "200Mi"
+      #       memoryLimit: "400Mi"
+      #     keepLatestMaintenanceJobs: 2
+      repositories: {}
+
+  extraArgs: []
+    # - "--foo=bar"
+
+  extraEnvVars: []
+    # - name: SIMPLE_VAR
+    #   value: "simple-value"
+    # - name: MY_POD_LABEL
+    #   valueFrom:
+    #     fieldRef:
+    #       fieldPath: metadata.labels['my_label']
+```
+
+### RBAC Configuration
+
+```yaml
+rbac:
+  create: true               # Create Velero role and role binding
+  clusterAdministrator: true # Create cluster role binding
+  clusterAdministratorName: cluster-admin
+```
+
+### Service Account Configuration
+
+```yaml
+serviceAccount:
+  server:
+    create: true
+    name: ""
+    annotations: {}
+    labels: {}
+    imagePullSecrets: []
+    automountServiceAccountToken: true
+```
+
+### Credentials Configuration
+
+```yaml
+credentials:
+  useSecret: true            # Set false if using kube2iam, kiam, or workload identity
+  name: ""                   # Secret name to create
+  existingSecret: ""         # Pre-existing secret name
+  secretContents: {}         # Cloud provider credentials
+    # cloud: |
+    #   [default]
+    #   aws_access_key_id=<REDACTED>
+    #   aws_secret_access_key=<REDACTED>
+  extraEnvVars: {}           # Environment variables stored in secret
+  extraSecretRef: ""         # Pre-existing secret for environment variables
+```
+
+### Node Agent Configuration
+
+```yaml
+deployNodeAgent: false
+
+nodeAgent:
+  disableHostPath: false
+  podVolumePath: /var/lib/kubelet/pods
+  pluginVolumePath: /var/lib/kubelet/plugins
+  
+  priorityClassName: ""
+  runtimeClassName: ""
+  
+  resources: {}
+    # requests:
+    #   cpu: 500m
+    #   memory: 512Mi
+    # limits:
+    #   cpu: 1000m
+    #   memory: 1024Mi
+  
+  resizePolicy: []
+    # - resourceName: cpu
+    #   restartPolicy: NotRequired
+  
+  tolerations: []
+  annotations: {}
+  labels: {}
+  podLabels: {}
+  
+  useScratchEmptyDir: true
+  extraVolumes: []
+  extraVolumeMounts: []
+  
+  extraEnvVars: []
+  extraArgs: []
+  
+  dnsPolicy: ClusterFirst
+  hostAliases: []
+  
+  podSecurityContext:
+    runAsUser: 0
+    # fsGroup: 1337
+  
+  containerSecurityContext: {}
+  lifecycle: {}
+  nodeSelector: {}
+  affinity: {}
+  dnsConfig: {}
+  updateStrategy: {}
+```
+
+### Backup Schedules
+
+```yaml
+schedules: {}
+# Example:
+# mybackup:
+#   disabled: false
+#   labels:
+#     myenv: foo
+#   annotations:
+#     myenv: foo
+#   schedule: "0 0 * * *"
+#   useOwnerReferencesInBackup: false
+#   paused: false
+#   skipImmediately: false
+#   template:
+#     ttl: "240h"
+#     storageLocation: default
+#     includedNamespaces:
+#     - foo
+#     excludedNamespaceScopedResources:
+#     - persistentVolumeClaims
+#     excludedClusterScopedResources:
+#     - persistentVolumes
+```
+
+### ConfigMaps
+
+```yaml
+configMaps: {}
+# Example:
+# fs-restore-action-config:
+#   labels:
+#     velero.io/plugin-config: ""
+#     velero.io/pod-volume-restore: RestoreItemAction
+#   data:
+#     image: velero/velero:v1.17.1
+#     cpuRequest: 200m
+#     memRequest: 128Mi
+#     cpuLimit: 200m
+#     memLimit: 128Mi
+```
+
+### Extra Objects
+
+```yaml
+extraObjects: []
+# Example: Deploy custom SecretProviderClass
+# - apiVersion: secrets-store.csi.x-k8s.io/v1
+#   kind: SecretProviderClass
+#   metadata:
+#     name: velero-secrets-store
+#   spec:
+#     provider: aws
+#     parameters:
+#       objects: |
+#         - objectName: "velero"
+#           objectType: "secretsmanager"
+#           jmesPath:
+#               - path: "access_key"
+#                 objectAlias: "access_key"
+#               - path: "secret_key"
+#                 objectAlias: "secret_key"
+#     secretObjects:
+#       - data:
+#         - key: access_key
+#           objectName: client-id
+#         - key: client-secret
+#           objectName: client-secret
+#         secretName: velero-secrets-store
+#         type: Opaque
 ```
 
 ---
 
-## References
-- [Velero Documentation](https://velero.io/docs/)
-- [Helm Charts Repository](https://github.com/vmware-tanzu/helm-charts)
-- [Kubernetes Pod Configuration](https://kubernetes.io/docs/tasks/configure-pod-container/)
+## EnvoyGateway Chart Configuration
 
+The EnvoyGateway chart deploys the Envoy Gateway API implementation.
+
+### Global Configuration
+
+```yaml
+global:
+  imageRegistry: ""          # Global image registry override
+  imagePullSecrets: []       # Global image pull secrets
+  
+  images:
+    envoyGateway:
+      image: docker.io/envoyproxy/gateway:v1.7.1
+      pullPolicy: IfNotPresent
+      pullSecrets: []
+    ratelimit:
+      image: docker.io/envoyproxy/ratelimit:c8765e89
+      pullPolicy: IfNotPresent
+      pullSecrets: []
+```
+
+### Pod Disruption Budget
+
+```yaml
+podDisruptionBudget:
+  minAvailable: 0
+  # maxUnavailable: 1
+```
+
+### Deployment Configuration
+
+```yaml
+deployment:
+  annotations: {}
+  
+  envoyGateway:
+    image:
+      repository: ""  # Override with full image if using custom registry
+      tag: ""         # Override version
+    imagePullPolicy: ""
+    imagePullSecrets: []
+    
+    resources:
+      limits:
+        memory: 1024Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+    
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      privileged: false
+      runAsNonRoot: true
+      runAsGroup: 65532
+      runAsUser: 65532
+      seccompProfile:
+        type: RuntimeDefault
+  
+  ports:
+    - name: grpc
+      port: 18000
+      targetPort: 18000
+    - name: ratelimit
+      port: 18001
+      targetPort: 18001
+    - name: wasm
+      port: 18002
+      targetPort: 18002
+    - name: metrics
+      port: 19001
+      targetPort: 19001
+  
+  priorityClassName: null
+  replicas: 1
+  
+  pod:
+    affinity: {}
+    annotations:
+      prometheus.io/scrape: 'true'
+      prometheus.io/port: '19001'
+    labels: {}
+    topologySpreadConstraints: []
+    tolerations: []
+    nodeSelector: {}
+```
+
+### Service Configuration
+
+```yaml
+service:
+  trafficDistribution: ""    # PreferClose for topology-aware routing
+  annotations: {}
+  type: "ClusterIP"
+  # loadBalancerIP: 10.236.90.20
+```
+
+### Horizontal Pod Autoscaler
+
+```yaml
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  metrics: []
+  behavior: {}
+```
+
+### EnvoyGateway Configuration
+
+```yaml
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+    logging:
+      level:
+        default: info
+    extensionApis: {}
+```
+
+### Namespace Management
+
+```yaml
+createNamespace: false
+kubernetesClusterDomain: cluster.local
+```
+
+### Certificate Generation
+
+```yaml
+# Certificate generation for EnvoyGateway (OIDC, OAuth2, etc.)
+# Do not disable certgen; it may cause issues with OIDC, OAuth2, etc.
+certgen:
+  job:
+    annotations: {}
+    args: []
+    
+    pod:
+      annotations: {}
+      labels: {}
+    
+    resources: {}
+    affinity: {}
+    tolerations: []
+    nodeSelector: {}
+    ttlSecondsAfterFinished: 30
+    
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      privileged: false
+      readOnlyRootFilesystem: true
+      runAsNonRoot: true
+      runAsGroup: 65532
+      runAsUser: 65532
+      seccompProfile:
+        type: RuntimeDefault
+  
+  rbac:
+    annotations: {}
+    labels: {}
+```
+
+### Topology Injector
+
+```yaml
+topologyInjector:
+  enabled: true
+  annotations: {}
+```
+
+---
+
+## Common Customization Examples
+
+### Backup to AWS S3
+
+```yaml
+velero:
+  image:
+    repository: docker.io/velero/velero
+    tag: v1.18.0
+  configuration:
+    backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: my-backup-bucket
+      prefix: velero
+      default: true
+      config:
+        region: us-east-1
+        s3ForcePathStyle: false
+    credentials:
+      useSecret: true
+      name: velero-aws-credentials
+      secretContents:
+        cloud: |
+          [default]
+          aws_access_key_id=AKIAIOSFODNN7EXAMPLE
+          aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+### Enable Prometheus Monitoring
+
+```yaml
+velero:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: prometheus
+```
+
+### Deploy Node Agent with Backup Schedules
+
+```yaml
+velero:
+  deployNodeAgent: true
+  nodeAgent:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1024Mi
+  schedules:
+    daily-backup:
+      schedule: "0 2 * * *"
+      template:
+        ttl: "240h"
+        storageLocation: default
+        includedNamespaces:
+        - "*"
+```
+
+### Custom EnvoyGateway Deployment
+
+```yaml
+envoy:
+  deployment:
+    replicas: 3
+    envoyGateway:
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 500m
+          memory: 1024Mi
+    pod:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - envoy-gateway
+              topologyKey: kubernetes.io/hostname
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+```
