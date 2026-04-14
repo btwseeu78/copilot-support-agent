@@ -159,12 +159,12 @@ func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts Analy
 	session.On(func(event copilot.SessionEvent) {
 		switch event.Type {
 		case "assistant.message":
-			if event.Data.Content != nil {
-				response.WriteString(*event.Data.Content)
+			if event.Data != nil {
+				response.WriteString(event.Data.(*copilot.AssistantMessageData).Content)
 			}
 		case "error":
-			if event.Data.Content != nil {
-				sessionErr = fmt.Errorf("copilot error: %s", *event.Data.Content)
+			if event.Data != nil {
+				sessionErr = fmt.Errorf("copilot error: %s", event.Data.(*copilot.SessionErrorData).Message)
 			}
 		case "session.idle":
 			close(done)

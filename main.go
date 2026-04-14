@@ -27,9 +27,9 @@ func main() {
 			if _, err := os.Stat(chartPath); os.IsNotExist(err) {
 				return fmt.Errorf("chart path %s does not exist", chartPath)
 			}
-			gh_token := os.Getenv("COPILOT_GITHUB_TOKEN")
+			gh_token := os.Getenv("GH_TOKEN")
 			if gh_token == "" {
-				return fmt.Errorf("COPILOT_GITHUB_TOKEN environment variable is not set")
+				return fmt.Errorf("GH_TOKEN environment variable is not set")
 			}
 			chartYamlPath := filepath.Join(chartPath, "Chart.yaml")
 			chartYaml, err := os.ReadFile(chartYamlPath)

@@ -1,80 +1,68 @@
-# Helm Chart Structural Diff Report
+# Structural Diff Report
 
 ## Summary
-**BREAKING CHANGES DETECTED: YES**
 
-Incompatibility found in `gateway-helm` values structure between local overrides and upstream chart.
+**BREAKING CHANGES DETECTED: YES** — The `gateway-helm` dependency contains overrides for keys that do not exist in upstream, causing them to have no effect.
 
 ---
 
-## Version Information
+## Version Info
 
-| Chart | Local Version | Upstream Version | Repository |
-|-------|---------------|------------------|------------|
-| velero | 11.0.0 | 12.0.0 | https://vmware-tanzu.github.io/helm-charts |
-| gateway-helm | v1.7.1 | 1.7.1 | oci://docker.io/envoyproxy |
+| Dependency   | Local Version | Latest Upstream Version | Status    |
+|--------------|---------------|------------------------|-----------|
+| velero       | 11.0.0        | 12.0.0                 | Outdated  |
+| gateway-helm | v1.7.1        | v1.7.1                 | Current   |
 
 ---
 
 ## Breaking Changes
 
-### gateway-helm: Structural Incompatibility
-
-| Key Path | Change Type | Details |
-|----------|-------------|---------|
-| `gateway-helm.image` | **MISSING IN UPSTREAM** | Local defines flat `image` block (repository, tag, pullPolicy). Upstream uses `global.images.envoyGateway.image` and/or `deployment.envoyGateway.image` instead. |
-| `gateway-helm.service.port` | **NOT IN UPSTREAM** | Local sets `service.port: 80`, but upstream `service` block only contains `type`, `annotations`, `trafficDistribution`. Port config should use `deployment.ports` instead. |
-
-#### Impact
-- Local override `gateway-helm.image.*` will be ignored by Helm chart
-- Local `gateway-helm.service.port: 80` has no effect; requires restructuring to use proper upstream paths
-- These must be updated to match upstream structure for deployment to work correctly
+| Key Path                       | Change Type               | Details |
+|--------------------------------|---------------------------|---------|
+| `gateway-helm.image`           | **Key does not exist**    | Top-level `image` block is not a valid upstream key. Image configuration must use `deployment.envoyGateway.image.{repository,tag}`, `deployment.envoyGateway.imagePullPolicy`, or `global.images.envoyGateway.*`. The local override (`image.repository`, `image.tag`, `image.pullPolicy`) has **no effect**. |
+| `gateway-helm.service.port`    | **Key does not exist**    | Upstream `service` block has only `trafficDistribution`, `annotations`, and `type`. There is no `port` field. The `port: 80` override is silently ignored. |
 
 ---
 
-## Missing Overrides (New Upstream Keys)
+## Missing Overrides
 
-### velero (11.0.0 → 12.0.0)
-No new keys in overridden blocks. The `image.*` keys used locally are stable across versions.
+New upstream keys within blocks that the local file already partially overrides:
 
-### gateway-helm (v1.7.1)
-While local overrides exist, they target non-existent keys. User should add:
-- `gateway-helm.global.images.envoyGateway.image` (or use `deployment.envoyGateway.image.repository` + `.tag`)
-- If port customization needed: use `gateway-helm.deployment.ports` (list of port objects)
+### gateway-helm — `service` block (local overrides `service.type`)
+
+| Key Path                           | Upstream Default | Notes |
+|------------------------------------|-----------------|-------|
+| `gateway-helm.service.trafficDistribution` | `""` | New field; set to `"PreferClose"` to route Envoy fleet traffic to topologically closest pods. |
+| `gateway-helm.service.annotations`         | `{}`  | Available for service-level annotations; local does not set this. |
 
 ---
 
 ## Info (Non-Breaking Differences)
 
-### velero
-- Local pins `image.tag: v1.18.0` matches upstream `v1.18.0` ✓
-- All local overrides target stable keys present in upstream 12.0.0
-- Version bump from 11.0.0 → 12.0.0 introduces many new configuration options but no breaking changes to existing overridden keys
+### velero — local version behind upstream (11.0.0 vs 12.0.0)
 
-### gateway-helm
-- Local version matches upstream version (1.7.1)
-- Gateway chart structure: upstream uses hierarchical `global.images`, `deployment.envoyGateway`, and `deployment.pod` for configuration
-- Local overrides use incompatible flat structure
+The local `velero` overrides (`image.repository`, `image.tag`, `image.pullPolicy`, `image.imagePullSecrets`) all map to valid keys in upstream 12.0.0. No breaking changes. However, upgrading from 11.0.0 to 12.0.0 may introduce new upstream keys you might want to review:
 
----
+| Key Path | Upstream Default | Notes |
+|---|---|---|
+| `velero.namespace.labels` | `{}` | New top-level namespace label configuration. |
+| `velero.upgradeCRDsJob` | (block) | New block with `extraVolumes`, `extraVolumeMounts`, `extraEnvVars`, `automountServiceAccountToken`. |
+| `velero.resizePolicy` | `[]` | Container resize policy for the Velero deployment. |
+| `velero.hostAliases` | `[]` | Host aliases for Velero pods. |
+| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData` | (block) | Per-repository and global maintenance job configuration. |
+| `velero.configuration.itemBlockWorkerCount` | (not set) | New server-level flag. |
+| `velero.configuration.dataMoverPrepareTimeout` | (not set) | Timeout for CSI snapshot volume provisioning. |
+| `velero.nodeAgent.disableHostPath` | `false` | Option to disable host path volumes for node-agent. |
+| `velero.nodeAgent.pluginVolumePath` | `/var/lib/kubelet/plugins` | New node-agent plugin volume path. |
+| `velero.nodeAgent.resizePolicy` | `[]` | Container resize policy for node-agent. |
+| `velero.metrics.service.externalTrafficPolicy` | `""` | New traffic policy fields on metrics service. |
+| `velero.metrics.service.internalTrafficPolicy` | `""` | New traffic policy fields on metrics service. |
+| `velero.metrics.service.ipFamilyPolicy` | `""` | IP family policy for metrics service. |
+| `velero.metrics.service.ipFamilies` | `[]` | IP families for metrics service. |
+| `velero.metrics.nodeAgentPodMonitor` | (block) | New PodMonitor for node-agent metrics. |
 
-## Recommendations
+### gateway-helm — `enabled` key
 
-1. **Velero**: No action required. Local overrides are compatible with upstream 12.0.0.
-
-2. **Gateway-helm**: Update local `values.yaml` to use correct upstream structure:
-   ```yaml
-   gateway-helm:
-     enabled: true
-     global:
-       images:
-         envoyGateway:
-           image: docker.io/envoyproxy/gateway:v1.7.1
-           pullPolicy: IfNotPresent
-     deployment:
-       envoyGateway:
-         imagePullSecrets: []
-     service:
-       type: ClusterIP
-   ```
-   Note: `service.port` does not exist in upstream; port configuration is in `deployment.ports` list.
+| Key Path | Notes |
+|---|---|
+| `gateway-helm.enabled` | Not a valid upstream key. Helm ignores unknown keys; this has no effect. Remove or replace with the correct pattern if conditional deployment is needed. |
