@@ -4,7 +4,7 @@ velero:
     tag: v1.18.0
     pullPolicy: IfNotPresent
     imagePullSecrets: []
-envoy:
+gateway-helm:
   enabled: true
   image:
     repository: docker.io/envoyproxy/envoy

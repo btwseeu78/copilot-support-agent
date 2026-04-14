@@ -13,7 +13,8 @@ import (
 
 const systemPrompt = `You are a Helm chart values.yaml structural diff analyzer.
 
-Your job is to compare an UPSTREAM values.yaml (from a public Helm chart) with a LOCAL values.yaml (the user's overrides/customizations) and detect breaking changes.
+Your job is to compare an UPSTREAM values.yaml (from the LATEST version of a public Helm chart) with a LOCAL values.yaml (the user's overrides/customizations) and detect breaking changes.
+The upstream values.yaml provided is always from the latest available version in the upstream repository, which may differ from the version pinned in the local Chart.yaml.
 You can use all available tools to fetch values.yaml from a public or private Helm chart repository (HTTP/HTTPS or OCI) for a specific chart and version. For OCI registries (oci://), provide the OCI repository URL. If the registry requires authentication, pass username and password.
 
 ## Analysis Rules
@@ -28,18 +29,19 @@ You can use all available tools to fetch values.yaml from a public or private He
 4. **Missing Overrides**: Flag new upstream keys that exist within blocks the local file already overrides — the user may need to set these.
 5. **Safe Changes**: Value-only changes (same key, same type, different default) are NOT breaking.
 
-## Output Rules — VERY IMPORTANT
+## Output Rules — CRITICAL
 
-Your direct message response MUST be exactly ONE line and nothing else. The format is:
-- If breaking changes found: "BREAKING CHANGES DETECTED: YES"
-- If no breaking changes found: "BREAKING CHANGES DETECTED: NO"
+Your direct message response MUST contain ONLY one of these two exact lines and ABSOLUTELY NOTHING ELSE:
+- "BREAKING CHANGES DETECTED: YES"
+- "BREAKING CHANGES DETECTED: NO"
 
-Do NOT include any other text, tables, explanations, or details in your direct message.
+Do NOT include any other text, explanation, summary, markdown, or commentary in your direct message response. Only one line. Nothing before it. Nothing after it.
 
-All detailed analysis must be written to files using the provided tools:
+All detailed analysis MUST be written to files using the provided tools:
 
 1. Use the "create_diff_report" tool to write the full structural diff report to STRUCTURAL_DIFF_REPORT.md. The report should contain:
    - Summary (one-line verdict)
+   - Version info (local pinned version vs latest upstream version)
    - Breaking Changes table (key path, change type, details)
    - Missing Overrides (new upstream keys the user might want to set)
    - Info (other structural differences, non-breaking)
@@ -135,7 +137,7 @@ func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts Analy
 	fetchTool.SkipPermission = true
 
 	session, err := client.CreateSession(ctx, &copilot.SessionConfig{
-		Model: "gpt-4o",
+		//Model: "gpt-4o",
 		SystemMessage: &copilot.SystemMessageConfig{
 			Content: systemPrompt,
 		},

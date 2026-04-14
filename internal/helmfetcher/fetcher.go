@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/getter"
@@ -175,3 +177,118 @@ func resolveChartURL(repoURL, chartName, version string, opts FetchOptions) (str
 	}
 	return chartURL, nil
 }
+
+// ResolveLatestVersion queries an HTTP(S) or OCI Helm repository and returns
+// the latest semver version string for the given chart.
+func ResolveLatestVersion(repoURL, chartName string, opts FetchOptions) (string, error) {
+	if strings.HasPrefix(repoURL, "oci://") {
+		return resolveLatestOCIVersion(repoURL, chartName, opts)
+	}
+	return resolveLatestHTTPVersion(repoURL, chartName, opts)
+}
+
+// resolveLatestHTTPVersion fetches index.yaml from an HTTP repo, sorts the
+// chart versions by semver, and returns the highest.
+func resolveLatestHTTPVersion(repoURL, chartName string, opts FetchOptions) (string, error) {
+	indexURL := strings.TrimRight(repoURL, "/") + "/index.yaml"
+
+	var getterOpts []getter.Option
+	if opts.Username != "" && opts.Password != "" {
+		getterOpts = append(getterOpts, getter.WithBasicAuth(opts.Username, opts.Password))
+	}
+
+	httpGetter, err := getter.NewHTTPGetter(getterOpts...)
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP getter: %w", err)
+	}
+
+	indexData, err := httpGetter.Get(indexURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch index.yaml from %s: %w", indexURL, err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "helm-index-*.yaml")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file for index: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(indexData.Bytes()); err != nil {
+		return "", fmt.Errorf("failed to write index to temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	idx, err := repo.LoadIndexFile(tmpFile.Name())
+	if err != nil {
+		return "", fmt.Errorf("failed to parse index.yaml: %w", err)
+	}
+
+	entries, ok := idx.Entries[chartName]
+	if !ok || len(entries) == 0 {
+		return "", fmt.Errorf("chart %s not found in repository index", chartName)
+	}
+
+	return pickLatestSemver(chartName, chartVersionStrings(entries))
+}
+
+// resolveLatestOCIVersion lists tags from an OCI registry and returns the
+// highest semver tag.
+func resolveLatestOCIVersion(repoURL, chartName string, opts FetchOptions) (string, error) {
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to create OCI registry client: %w", err)
+	}
+
+	if opts.Username != "" && opts.Password != "" {
+		host := strings.TrimPrefix(repoURL, "oci://")
+		host = strings.Split(host, "/")[0]
+		err = registryClient.Login(host,
+			registry.LoginOptBasicAuth(opts.Username, opts.Password),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to login to OCI registry %s: %w", host, err)
+		}
+	}
+
+	ref := strings.TrimPrefix(strings.TrimRight(repoURL, "/"), "oci://") + "/" + chartName
+
+	tags, err := registryClient.Tags(ref)
+	if err != nil {
+		return "", fmt.Errorf("failed to list OCI tags for %s: %w", ref, err)
+	}
+	if len(tags) == 0 {
+		return "", fmt.Errorf("no tags found for OCI chart %s", ref)
+	}
+
+	return pickLatestSemver(chartName, tags)
+}
+
+// chartVersionStrings extracts version strings from Helm index chart versions.
+func chartVersionStrings(entries repo.ChartVersions) []string {
+	versions := make([]string, 0, len(entries))
+	for _, cv := range entries {
+		versions = append(versions, cv.Version)
+	}
+	return versions
+}
+
+// pickLatestSemver parses a list of version strings as semver, sorts them
+// descending, and returns the highest one.
+func pickLatestSemver(chartName string, raw []string) (string, error) {
+	var parsed []*semver.Version
+	for _, r := range raw {
+		v, err := semver.NewVersion(r)
+		if err != nil {
+			continue // skip non-semver tags
+		}
+		parsed = append(parsed, v)
+	}
+	if len(parsed) == 0 {
+		return "", fmt.Errorf("no valid semver versions found for chart %s", chartName)
+	}
+
+	sort.Sort(sort.Reverse(semver.Collection(parsed)))
+	return parsed[0].Original(), nil
+}
+

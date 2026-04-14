@@ -59,23 +59,31 @@ func main() {
 			for _, dep := range deps {
 				repoURL := dep.Repository
 				chartName := dep.Name
-				version := dep.Version
+				localVersion := dep.Version
 
 				if repoURL == "" {
 					fmt.Printf("Warning: dependency %s does not have a repository URL, skipping\n", chartName)
 					continue
 				}
 
-				fmt.Printf("Fetching upstream values for %s from %s (version: %s)...\n", chartName, repoURL, version)
-				upstreamRaw, err := helmfetcher.FetchValuesWithOptions(repoURL, chartName, version, fetchOpts)
+				// Always resolve the latest upstream version
+				fmt.Printf("Resolving latest upstream version for %s from %s...\n", chartName, repoURL)
+				latestVersion, err := helmfetcher.ResolveLatestVersion(repoURL, chartName, fetchOpts)
+				if err != nil {
+					fmt.Printf("Warning: failed to resolve latest version for %s: %v, falling back to Chart.yaml version %s\n", chartName, err, localVersion)
+					latestVersion = localVersion
+				}
+
+				fmt.Printf("Fetching upstream values for %s from %s (latest version: %s, local version: %s)...\n", chartName, repoURL, latestVersion, localVersion)
+				upstreamRaw, err := helmfetcher.FetchValuesWithOptions(repoURL, chartName, latestVersion, fetchOpts)
 				if err != nil {
 					fmt.Printf("Warning: failed to fetch upstream values for %s: %v\n", chartName, err)
 					continue
 				}
 
 				chartInfoParts = append(chartInfoParts, fmt.Sprintf(
-					"### Dependency: %s\nChart: %s, Version: %s, Repo: %s\n\nUpstream values.yaml:\n```yaml\n%s\n```",
-					chartName, chartName, version, repoURL, upstreamRaw,
+					"### Dependency: %s\nChart: %s, Latest Upstream Version: %s, Local Version: %s, Repo: %s\n\nUpstream values.yaml (latest version %s):\n```yaml\n%s\n```",
+					chartName, chartName, latestVersion, localVersion, repoURL, latestVersion, upstreamRaw,
 				))
 			}
 
