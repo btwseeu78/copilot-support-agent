@@ -44,15 +44,19 @@ func fetchOCIValues(repoURL, chartName, version string, opts FetchOptions) (stri
 		return "", fmt.Errorf("failed to create OCI registry client: %w", err)
 	}
 
-	// Login if credentials are provided
+	// Attempt login when credentials are provided; on failure discard the client
+	// and use a fresh anonymous one so the failed auth state is not carried forward.
 	if opts.Username != "" && opts.Password != "" {
 		host := strings.TrimPrefix(repoURL, "oci://")
 		host = strings.Split(host, "/")[0]
-		err = registryClient.Login(host,
+		if loginErr := registryClient.Login(host,
 			registry.LoginOptBasicAuth(opts.Username, opts.Password),
-		)
-		if err != nil {
-			return "", fmt.Errorf("failed to login to OCI registry %s: %w", host, err)
+		); loginErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: OCI login to %s failed (%v), falling back to anonymous pull\n", host, loginErr)
+			registryClient, err = registry.NewClient()
+			if err != nil {
+				return "", fmt.Errorf("failed to create anonymous OCI registry client: %w", err)
+			}
 		}
 	}
 
@@ -97,6 +101,17 @@ func fetchHTTPValues(repoURL, chartName, version string, opts FetchOptions) (str
 	}
 
 	data, err := httpGetter.Get(chartURL)
+	if err != nil && len(getterOpts) > 0 {
+		// Auth failed — resolve chart URL without creds and retry with a clean getter.
+		fmt.Fprintf(os.Stderr, "Warning: authenticated HTTP fetch failed (%v), falling back to anonymous\n", err)
+		anonURL, urlErr := resolveChartURL(repoURL, chartName, version, FetchOptions{})
+		if urlErr == nil {
+			anonGetter, anonErr := getter.NewHTTPGetter()
+			if anonErr == nil {
+				data, err = anonGetter.Get(anonURL)
+			}
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to download chart %s@%s: %w", chartName, version, err)
 	}
@@ -291,4 +306,3 @@ func pickLatestSemver(chartName string, raw []string) (string, error) {
 	sort.Sort(sort.Reverse(semver.Collection(parsed)))
 	return parsed[0].Original(), nil
 }
-

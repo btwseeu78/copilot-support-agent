@@ -6,10 +6,11 @@ velero:
     imagePullSecrets: []
 gateway-helm:
   enabled: true
-  image:
-    repository: docker.io/envoyproxy/envoy
-    tag: v1.7.1
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 80
+  global:
+    image:
+      repository: docker.io/envoyproxy/envoy
+      tag: v1.7.1
+      pullPolicy: IfNotPresent
+    service:
+      type: ClusterIP
+      port: 80
