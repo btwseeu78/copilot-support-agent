@@ -74,6 +74,7 @@ type DiffReportParams struct {
 type AnalyzeOptions struct {
 	RegistryUsername string
 	RegistryPassword string
+	Token            string
 }
 
 // Analyze sends the upstream and local values.yaml to Copilot AI for
@@ -81,6 +82,7 @@ type AnalyzeOptions struct {
 func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts AnalyzeOptions) (string, error) {
 	opts := &copilot.ClientOptions{
 		LogLevel: "error",
+		Env:      []string{"COPILOT_GITHUB_TOKEN=" + analyzeOpts.Token},
 	}
 	client := copilot.NewClient(opts)
 

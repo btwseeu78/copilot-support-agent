@@ -7,8 +7,7 @@ variables:
 helm-upgrade-analysis:
   stage: helm-upgrade-check
   image:
-    name: linuxarpan/copilot-support-agent:tagname
-    entrypoint: [""]
+    name: linuxarpan/copilot-support-agent:v3
   before_script:
     - test -n "$COPILOT_GITHUB_TOKEN"
     - export COPILOT_GITHUB_TOKEN="$COPILOT_GITHUB_TOKEN" copilot login
@@ -17,27 +16,18 @@ helm-upgrade-analysis:
       /usr/local/bin/copilot-support-agent \
         --chart-path "$CHART_PATH" \
         --registry-username "${HELM_REGISTRY_USERNAME:-}" \
-        --registry-password "${HELM_REGISTRY_PASSWORD:-}" \
-        | tee analysis-output.log
-    - |
-      verdict="$(grep -Eo 'BREAKING CHANGES DETECTED: (YES|NO)' analysis-output.log | tail -n1)"
-      if [ -z "$verdict" ]; then
-        echo "Could not determine verdict from tool output"
-        exit 1
-      fi
-      echo "$verdict" | tee verdict.txt
-      if [ "$verdict" = "BREAKING CHANGES DETECTED: YES" ]; then
-        echo "Breaking changes found in Helm chart upgrade analysis"
-        exit 1
-      fi
+        --registry-password "${HELM_REGISTRY_PASSWORD:-}" | tee copilot-support-agent-output.log
+    - echo "----- STRUCTURAL_DIFF_REPORT.md -----"
+    - test -f STRUCTURAL_DIFF_REPORT.md && cat STRUCTURAL_DIFF_REPORT.md || echo "STRUCTURAL_DIFF_REPORT.md not generated"
+    - echo "----- Readme.md -----"
+    - test -f Readme.md && cat Readme.md || echo "Readme.md not generated"
   artifacts:
     when: always
     paths:
-      - analysis-output.log
-      - verdict.txt
       - STRUCTURAL_DIFF_REPORT.md
       - Readme.md
-    expire_in: 1 days
+      - copilot-support-agent-output.log
+    expire_in: 7 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH'

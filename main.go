@@ -27,7 +27,10 @@ func main() {
 			if _, err := os.Stat(chartPath); os.IsNotExist(err) {
 				return fmt.Errorf("chart path %s does not exist", chartPath)
 			}
-
+			gh_token := os.Getenv("COPILOT_GITHUB_TOKEN")
+			if gh_token == "" {
+				return fmt.Errorf("COPILOT_GITHUB_TOKEN environment variable is not set")
+			}
 			chartYamlPath := filepath.Join(chartPath, "Chart.yaml")
 			chartYaml, err := os.ReadFile(chartYamlPath)
 			if err != nil {
@@ -93,6 +96,7 @@ func main() {
 			analyzeOpts := analyzer.AnalyzeOptions{
 				RegistryUsername: registryUsername,
 				RegistryPassword: registryPassword,
+				Token:            gh_token,
 			}
 			report, err := analyzer.Analyze(cmd.Context(), string(valuesYaml), chartInfo, analyzeOpts)
 			if err != nil {
@@ -109,7 +113,6 @@ func main() {
 	rootCmd.Flags().StringVar(&chartPath, "chart-path", ".", "Path to the local Helm chart directory")
 	rootCmd.Flags().StringVar(&registryUsername, "registry-username", "", "Username for authenticated Helm registries (HTTP or OCI)")
 	rootCmd.Flags().StringVar(&registryPassword, "registry-password", "", "Password for authenticated Helm registries (HTTP or OCI)")
-
 	if err := rootCmd.ExecuteContext(context.Background()); err != nil {
 		log.Fatal(err)
 	}
