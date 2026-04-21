@@ -2,82 +2,123 @@
 
 ## Summary
 
-**BREAKING CHANGES DETECTED: YES**
-
-The `gateway-helm` dependency contains two overrides targeting key paths that do not exist in upstream v1.7.1. These overrides are silently dropped at render time. The `velero` dependency overrides are structurally compatible with upstream v12.0.0, but a major version bump (11.0.0 → 12.0.0) introduces new configurable keys worth reviewing.
+**BREAKING CHANGES DETECTED: YES** — The local `values.yaml` overrides keys in `gateway-helm` that do not exist in the upstream chart (wrong key names / wrong nesting), meaning those overrides will have no effect and the chart may behave unexpectedly.
 
 ---
 
 ## Version Info
 
-| Dependency    | Local Version | Latest Upstream Version | Status         |
-|---------------|---------------|-------------------------|----------------|
-| `velero`      | 11.0.0        | 12.0.0                  | ⚠️ Out of date  |
-| `gateway-helm`| v1.7.1        | v1.7.1                  | ✅ Up to date   |
+| Dependency    | Local Version | Latest Upstream Version | Version Delta |
+|---------------|--------------|------------------------|---------------|
+| velero        | 11.0.0       | 12.0.0                 | ⚠️ Behind by 1 major version |
+| gateway-helm  | v1.7.1       | v1.7.1                 | ✅ Up to date |
 
 ---
 
 ## Breaking Changes
 
-| # | Key Path (local)                        | Change Type              | Details |
-|---|-----------------------------------------|--------------------------|---------|
-| 1 | `gateway-helm.global.image`             | **Key does not exist**   | Local overrides `global.image.repository`, `global.image.tag`, and `global.image.pullPolicy`, but upstream v1.7.1 has **no `global.image` key**. Upstream uses `global.imageRegistry` (string) for registry override and `global.images.envoyGateway` / `global.images.ratelimit` for per-image settings. These overrides are silently ignored. |
-| 2 | `gateway-helm.global.service`           | **Key does not exist**   | Local overrides `global.service.type` and `global.service.port`, but upstream has **no `global.service` key**. The `service` block exists at **top level** (`service.type`, `service.annotations`). The local path is wrong and overrides are silently dropped. Additionally, `service.port` does not exist in upstream at all (top-level `service` has no `port` field). |
+| Key Path (local) | Change Type | Details |
+|---|---|---|
+| `gateway-helm.global.image` | **BREAKING — Key does not exist** | Upstream uses `global.images` (plural) with sub-keys `envoyGateway` and `ratelimit`. Local overrides `global.image` (singular) which is not a valid upstream key. This override is silently ignored. |
+| `gateway-helm.global.image.repository` | **BREAKING — Wrong path** | Correct upstream paths: `global.images.envoyGateway.image` (full image string) or `deployment.envoyGateway.image.repository`. |
+| `gateway-helm.global.image.tag` | **BREAKING — Wrong path** | No standalone `tag` field under `global.images.*`. Use `global.images.envoyGateway.image` (full image string including tag) or `deployment.envoyGateway.image.tag`. |
+| `gateway-helm.global.image.pullPolicy` | **BREAKING — Wrong path** | Correct upstream path: `global.images.envoyGateway.pullPolicy`. |
+| `gateway-helm.global.service` | **BREAKING — Key does not exist** | Upstream has no `global.service`. The service configuration lives at `service.type`, `service.annotations`, `service.trafficDistribution`. This override is silently ignored. |
+| `gateway-helm.enabled` | **BREAKING — Key does not exist** | Upstream gateway-helm chart has no top-level `enabled` key. This override has no effect. |
 
 ---
 
-## Missing Overrides
+## Missing Overrides (new upstream keys in overridden blocks)
 
-New keys in blocks the local file already overrides, or notable additions in the upstream version bump.
+### velero (11.0.0 → 12.0.0)
 
-### gateway-helm (v1.7.1 — same version, structural mismatches only)
+The local file overrides `velero.image.*`. The upstream image block is structurally compatible, but 12.0.0 adds new top-level keys you may want to review:
 
-The correct paths to override image and service settings:
+| New Upstream Key | Default | Notes |
+|---|---|---|
+| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData.global.keepLatestMaintenanceJobs` | `3` | New in 12.x — controls how many maintenance jobs to keep. |
+| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData.repositories` | `{}` | Per-repository resource/maintenance config map. |
+| `velero.upgradeCRDsJob.extraVolumes` | `[]` | New block for the upgrade CRDs job. |
+| `velero.upgradeCRDsJob.extraVolumeMounts` | `[]` | New block for the upgrade CRDs job. |
+| `velero.upgradeCRDsJob.extraEnvVars` | `[]` | New block for the upgrade CRDs job. |
+| `velero.upgradeCRDsJob.automountServiceAccountToken` | `true` | New in upgrade CRDs job. |
+| `velero.namespace.labels` | `{}` | New top-level namespace label support. |
+| `velero.resizePolicy` | `[]` | Container resize policy for Velero deployment. |
+| `velero.nodeAgent.disableHostPath` | `false` | New node-agent flag. |
+| `velero.nodeAgent.pluginVolumePath` | `/var/lib/kubelet/plugins` | New node-agent volume path. |
+| `velero.nodeAgent.resizePolicy` | `[]` | Container resize policy for node-agent. |
+| `velero.metrics.service.externalTrafficPolicy` | `""` | New metrics service traffic policy fields. |
+| `velero.metrics.service.internalTrafficPolicy` | `""` | New metrics service traffic policy fields. |
+| `velero.metrics.service.ipFamilyPolicy` | `""` | Dual-stack IP family policy. |
+| `velero.metrics.service.ipFamilies` | `[]` | Dual-stack IP families list. |
+| `velero.metrics.nodeAgentPodMonitor` | (block) | New PodMonitor support for node-agent metrics. |
 
-| Correct Upstream Key Path                          | Type   | Default                                   | Notes |
-|----------------------------------------------------|--------|-------------------------------------------|-------|
-| `gateway-helm.global.imageRegistry`                | string | `""`                                      | Global registry override (replaces registry portion of all images) |
-| `gateway-helm.global.imagePullSecrets`             | list   | `[]`                                      | Global pull secrets for all images |
-| `gateway-helm.global.images.envoyGateway.image`    | string | `docker.io/envoyproxy/gateway:v1.7.1`     | Full image reference (registry+repo+tag) for EnvoyGateway |
-| `gateway-helm.global.images.envoyGateway.pullPolicy` | string | `IfNotPresent`                          | Pull policy for EnvoyGateway image |
-| `gateway-helm.global.images.ratelimit.image`       | string | `docker.io/envoyproxy/ratelimit:c8765e89` | Full image reference for ratelimit sidecar |
-| `gateway-helm.service.type`                        | string | `ClusterIP`                               | Correct path for service type (not under `global`) |
-| `gateway-helm.deployment.envoyGateway.image.repository` | string | `""`                                | Per-deployment image repository override |
-| `gateway-helm.deployment.envoyGateway.image.tag`   | string | `""`                                      | Per-deployment image tag override |
+### gateway-helm (v1.7.1 — same version, but local overrides are broken)
 
-### velero (v11.0.0 → v12.0.0 — notable new keys)
-
-The local file overrides `velero.image.*`, which is structurally unchanged and safe. However, the following keys are new in v12.0.0 and may require attention:
-
-| New Upstream Key Path                                                        | Type   | Default | Notes |
-|------------------------------------------------------------------------------|--------|---------|-------|
-| `velero.namespace.labels`                                                    | map    | `{}`    | Labels applied to the Velero install namespace (e.g. Pod Security Standards) |
-| `velero.resizePolicy`                                                        | list   | `[]`    | Container resize policy for the Velero deployment |
-| `velero.upgradeCRDsJob.extraVolumes`                                         | list   | `[]`    | Extra volumes for the upgrade CRDs job |
-| `velero.upgradeCRDsJob.extraVolumeMounts`                                    | list   | `[]`    | Extra volume mounts for the upgrade CRDs job |
-| `velero.upgradeCRDsJob.extraEnvVars`                                         | list   | `[]`    | Extra env vars for the upgrade CRDs job |
-| `velero.upgradeCRDsJob.automountServiceAccountToken`                         | bool   | `true`  | Controls SA token automount in the upgrade job |
-| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData.name`   | string | `velero-repo-maintenance` | ConfigMap name for per-repository maintenance settings |
-| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData.global.keepLatestMaintenanceJobs` | int | `3` | Global retention for maintenance jobs |
-| `velero.configuration.repositoryMaintenanceJob.repositoryConfigData.repositories` | map | `{}` | Per-repository resource/job settings |
-| `velero.nodeAgent.disableHostPath`                                           | bool   | `false` | Disables host path volumes for node-agent |
-| `velero.nodeAgent.podVolumePath`                                             | string | `/var/lib/kubelet/pods` | Kubelet pods path for node-agent |
-| `velero.nodeAgent.pluginVolumePath`                                          | string | `/var/lib/kubelet/plugins` | Kubelet plugins path for node-agent |
-| `velero.nodeAgent.resizePolicy`                                              | list   | `[]`    | Container resize policy for node-agent daemonset |
-| `velero.nodeAgent.lifecycle`                                                 | map    | `{}`    | Lifecycle hooks for node-agent containers |
-| `velero.metrics.service.externalTrafficPolicy`                               | string | `""`    | External traffic policy for metrics service |
-| `velero.metrics.service.internalTrafficPolicy`                               | string | `""`    | Internal traffic policy for metrics service |
-| `velero.metrics.service.ipFamilyPolicy`                                      | string | `""`    | IP family policy for dual-stack metrics service |
-| `velero.metrics.service.ipFamilies`                                          | list   | `[]`    | IP families for metrics service |
-| `velero.metrics.nodeAgentPodMonitor`                                         | map    | (block) | New PodMonitor block for node-agent metrics |
-| `velero.configuration.itemBlockWorkerCount`                                  | int    | `1`     | Worker count for item block processing |
+| Upstream Key | Default | Notes |
+|---|---|---|
+| `global.imageRegistry` | `""` | Global registry override (not used in local). |
+| `global.images.envoyGateway.image` | `docker.io/envoyproxy/gateway:v1.7.1` | **Use instead of** `global.image.repository`+`tag`. |
+| `global.images.envoyGateway.pullPolicy` | `IfNotPresent` | **Use instead of** `global.image.pullPolicy`. |
+| `global.images.ratelimit.image` | `docker.io/envoyproxy/ratelimit:c8765e89` | Ratelimit image (not configured locally). |
+| `service.type` | `ClusterIP` | **Use instead of** `global.service.type`. |
+| `deployment.envoyGateway.image.repository` | `""` | Alternative per-component image override. |
 
 ---
 
 ## Info (Non-Breaking Structural Differences)
 
-| Key Path                              | Note |
-|---------------------------------------|------|
-| `gateway-helm.enabled`                | Helm subchart convention key; not present in upstream `values.yaml` but valid — controls whether the subchart is deployed. No issue. |
-| `velero.image.*`                      | All four local overrides (`repository`, `tag`, `pullPolicy`, `imagePullSecrets`) match upstream v12.0.0 structure exactly. Safe. |
-| `velero` version bump 11→12           | Major version bump. Review full changelog before upgrading. The locally-overridden keys are structurally compatible, but the new keys above may alter default behavior (especially `repositoryMaintenanceJob` and node-agent path defaults). |
+| Key Path | Notes |
+|---|---|
+| `velero.image.*` | All four local overrides (`repository`, `tag`, `pullPolicy`, `imagePullSecrets`) are valid and structurally match upstream 12.0.0. Safe. |
+| `gateway-helm` version | Local and upstream are both v1.7.1 — no version drift, but local override keys are incorrect (see Breaking Changes above). |
+
+---
+
+## Recommended Fixes
+
+### Fix `gateway-helm` image overrides
+
+Replace:
+```yaml
+gateway-helm:
+  global:
+    image:
+      repository: docker.io/envoyproxy/envoy
+      tag: v1.7.1
+      pullPolicy: IfNotPresent
+```
+
+With:
+```yaml
+gateway-helm:
+  global:
+    images:
+      envoyGateway:
+        image: docker.io/envoyproxy/envoy:v1.7.1
+        pullPolicy: IfNotPresent
+```
+
+### Fix `gateway-helm` service override
+
+Replace:
+```yaml
+gateway-helm:
+  global:
+    service:
+      type: ClusterIP
+      port: 80
+```
+
+With:
+```yaml
+gateway-helm:
+  service:
+    type: ClusterIP
+```
+
+> Note: `port` is not a configurable field in upstream `service`; ports are defined under `deployment.ports`.
+
+### Remove `gateway-helm.enabled`
+
+This key does not exist in the upstream chart and has no effect. Remove it.

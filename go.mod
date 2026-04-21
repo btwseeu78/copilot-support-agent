@@ -98,4 +98,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
-tool github.com/github/copilot-sdk/go/cmd/bundler
+tool (
+	copilot-support-agent
+	github.com/github/copilot-sdk/go/cmd/bundler
+)
