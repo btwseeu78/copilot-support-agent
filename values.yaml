@@ -1,16 +1,212 @@
-velero:
-  image:
-    repository: docker.io/velero/velero
-    tag: v1.18.0
-    pullPolicy: IfNotPresent
-    imagePullSecrets: []
-gateway-helm:
+prometheus:
+  # -- Enables Prometheus Operator monitoring
   enabled: true
+  rules:
+    # -- Labels to affect to the Prometheus Rules
+    labels:
+      prometheus: prometheus-operator-prometheus
+
+velero:
+  credentials:
+    # -- Use secret for bucket credentials (deactivate if used with workload identity)
+    useSecret: false
+    # -- Name of the existing secret containing gcp creds
+    existingSecret: velero-bucket
+  configuration:
+    # -- Provider used for backups
+    backupStorageLocation:
+      # -- Name of the provider used for default backup location
+      - name: default
+        # provider is the name for the backup storage location provider.
+        provider: gcp
+        # -- Path in the bucket for velero backup
+        prefix: backups
+        # -- Additional provider-specific configuration. See the [link](https://velero.io/docs/v1.5/supported-providers/) for further informations
+        config: {}
+        # serviceAccount: velero-bucket@<GCP PROJECT ID>.iam.gserviceaccount.com
+    volumeSnapshotLocation:
+      # -- Name of the provider used for default snapshot location
+      - name: default
+        # provider is the name for the volume snapshot provider.
+        provider: gcp
+        config:
+          # -- Snapshot location
+          snapshotLocation: europe-west1
+
+  rbac:
+    # -- Creates RBAC for velero
+    create: true
+  serviceAccount:
+    server:
+      # -- Create Velero SA through velero helm chart (does not allow workload identity - SA created through this Chart helm)
+      create: true
+      # -- Name of the service Account
+      name: velero
+      # -- Annotations to add to the velero service account
+      annotations: {}
+        # iam.gke.io/gcp-service-account: velero-bucket@<GCP PROJECT ID>.iam.gserviceaccount.com
+  metrics:
+    # -- Enables prometheus metrics
+    enabled: true
+    serviceMonitor:
+      # -- Enables prometheus-operator service monitor
+      enabled: true
+      # -- Labels to add to the velero service monitor
+      additionalLabels:
+        prometheus: prometheus-operator-prometheus
+
+  # -- List of init containers for velero plugin
+  initContainers:
+    - name: velero-plugin-for-gcp
+      image: velero/velero-plugin-for-gcp:v1.13.2
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - mountPath: /target
+          name: plugins
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+
+backups:
+  # -- Enables creation of a velero schedule
+  enabled: false
+  # -- Period of backup
+  schedule: "@every 24h"
+  # -- ttl of the backup
+  ttl: "96h0m0s"
+  # -- List of namespace backuped by velero
+  namespaces:
+    - default
+
+tags:
+  # -- Enables Config Connector features
+  configConnector:
+    workloadIdentity: true
+    iamPolicyMember: true
+    gcpBucket: true
+    iamCustomRole: true
+
+# -- `tags.configConnector` must be set to `true`
+gcpbucket:
   global:
-    image:
-      repository: docker.io/envoyproxy/envoy
-      tag: v1.7.1
-      pullPolicy: IfNotPresent
-    service:
-      type: ClusterIP
-      port: 80
+    # global.cnrmNamespace -- Allows to deploy in another namespace than the release one
+    # @default -- `nil`
+    cnrmNamespace: ""
+    # global.location -- Region where to create the bucket. Can be a single region (ex: europe-west1) or multi region bucket (ex: EU)
+    location: EUROPE-WEST1
+    # global.abandon -- Activate abandon of the database (If true, the database will be keep after deleting k8s resources)
+    abandon: false
+    # global.skipUnspecifiedFields -- Due to technical limitation in Config Connector, list fields in your resource configuration cannot be managed externally by default.
+    # This means Config Connector always takes ownership of list fields in the resource spec, even when the field is not specified in your original resource configuration.
+    # To bypass this limitation and let list fields be managed externally, use the cnrm.cloud.google.com/state-into-spec annotation.
+    skipUnspecifiedFields: false
+    # global.sia -- SIA of the project
+    sia: "gke"
+    # global.env -- Env of the cluster
+    env: "lab"
+    # global.context -- Context of the cluster
+    context: "adm"
+    # global.gcpProjectId -- Project ID where to deploy the cluster
+    gcpProjectId: "irn-XXXXX-ope-YY"
+
+  # bucketName -- Name of the bucket. Must be unique.
+  bucketName: velero-bkp-env
+
+  # accessControl -- Configure access control for the bucket
+  accessControl:
+    # accessControl.uniformBucketLevelAccess -- Activate [uniform bucket-level access](https://cloud.google.com/storage/docs/uniform-bucket-level-access)
+    uniformBucketLevelAccess: false
+    # accessControl.publicAccessPrevention -- The bucket's public access prevention status, which is either "inherited" or "enforced". If "inherited", the bucket uses public access prevention only if the bucket is subject to the public access prevention organization policy constraint.
+    publicAccessPrevention: inherited
+    # accessControl.createCloudIamPolicy -- Create iam policy member for the bucket through kcc, based on the `iamPolicy` list.
+    createCloudIamPolicy: true
+    iamPolicy:
+      # accessControl.iamPolicy[0].member -- An identifier for the member, which usually has the following form: member-type:id. For example, user:my-user@example.com. For a full list of the values that member can have, see the [Policy Binding reference](https://cloud.google.com/iam/docs/reference/rest/v1/Policy#Binding).
+      - member: serviceAccount:sa-name@${gcpProjectId?}.iam.gserviceaccount.com
+        # accessControl.iamPolicy[0].role -- Name of the [role](https://cloud.google.com/storage/docs/access-control/iam-roles) to apply to the bucket
+        role: roles/storage.admin
+
+# -- `tags.configConnector` must be set to `true`
+workloadidentity:
+  global:
+    # global.gcpProjectId -- Google Project ID of the Kubernetes Cluster hosting the service Account
+    gcpProjectId: my-gcp-project-id
+    # global.gsa -- Name of the Google Service Account
+    gsa:
+      # Creates the Google Service Account
+      create: true
+      # Name of the google service account
+      name: velero
+      # Project Id hosting the google service account.
+      project: ""
+
+    # global.cnrmNamespace -- Allows to deploy in another namespace than the release one
+    cnrmNamespace: ""
+    # global.abandon -- Activate abandon of the resources (If true, the GCP resources will be keep after deleting k8s resources)
+    abandon: false
+    ksa:
+      # global.ksa.namespace -- Kubernetes Service Account namespace. Overrides the Release Namespace
+      namespace: "velero"
+      # global.ksa.name -- Name of the Kubernetes Service Account
+      name: velero
+
+# -- `tags.configConnector` must be set to `true`
+iamcustomrole:
+  global:
+    # global.gcpProjectId -- Project ID where to deploy the custom role
+    gcpProjectId: "irn-XXXXX-ope-YY"
+    # global.gcpOrganisationId -- Organisation ID where to deploy the custom role
+    gcpOrganisationId: ""
+    # global.skipUnspecifiedFields -- This skips populating unspecified fields into the Kubernetes resource spec
+    skipUnspecifiedFields: false
+    # global.sia -- SIA of the project
+    sia: "gke"
+    # global.env -- Env of the cluster
+    env: "lab"
+    # global.context -- Context of the cluster
+    context: "adm"
+    # global.cnrmNamespace -- Allows to deploy in another namespace than the release one
+    cnrmNamespace: ""
+
+  # -- The name of the IAM Custom Role
+  customRoleName: velero
+  # -- A human-readable description for the role
+  description: "The description of the custom role resource"
+  # -- A human-readable title for the role
+  title: velero
+  # -- custom role permissions
+  permissions:
+    - compute.disks.create
+    - compute.disks.createSnapshot
+    - compute.disks.get
+    - compute.snapshots.create
+    - compute.snapshots.delete
+    - compute.snapshots.get
+    - compute.snapshots.useReadOnly
+    - compute.zones.get
+
+# -- `tags.configConnector` must be set to `true`
+iampolicymember:
+  global:
+    sia: gke
+    gsa: velero
+    gcpProjectId: irn-70740-admin-2931693924
+    cnrmNamespace: cnrm-gcp-infra
+    irn: "irn-xxxx"
+    environment: ope
+    env: ope
+    context: adm
+  policyMembers: []
+    # - name: backup-xxxx
+    #   member: 'serviceAccount:velero@xxxxxxx.iam.gserviceaccount.com'
+    #   role: projects/irn-70740-admin-2931693924/roles/velero.server
+    #   resourceRef:
+    #     apiVersion: storage.cnrm.cloud.google.com/v1beta1
+    #     kind: StorageBucket
+    #     name: velero-xxxx
+    #     namespace: cnrm-gcp-infra
+
+  gcpProject:
+    # gcpProject.external -- Define if the project have been deployed with Config-Connector or Not. set `false` if the deployed by config-connector
+    external: false

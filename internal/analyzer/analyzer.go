@@ -82,7 +82,6 @@ type AnalyzeOptions struct {
 func Analyze(ctx context.Context, localYAML, chartInfo string, analyzeOpts AnalyzeOptions) (string, error) {
 	opts := &copilot.ClientOptions{
 		LogLevel: "error",
-		Env:      []string{"COPILOT_GITHUB_TOKEN=" + analyzeOpts.Token},
 	}
 	client := copilot.NewClient(opts)
 
